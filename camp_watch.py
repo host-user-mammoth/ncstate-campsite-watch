@@ -30,6 +30,7 @@ import time
 import urllib.parse
 import urllib.request
 from email.message import EmailMessage
+from email.utils import formataddr
 from pathlib import Path
 
 # --- Settings -----------------------------------------------------------------
@@ -51,6 +52,9 @@ RV_LENGTH_FT = 25
 RV_EQUIPMENT = "TT"  # FW fifth wheel, MHA/MHB/MHC motorhome, PU popup, TT travel trailer, TC truck camper
 EQUIPMENT_NAMES = {"FW": "fifth wheel", "MHA": "Class A motorhome", "MHB": "Class B motorhome",
                    "MHC": "Class C motorhome", "PU": "popup", "TT": "travel trailer", "TC": "truck camper"}
+
+# Sender name recipients see on alert emails, in place of the Gmail account's own name.
+EMAIL_FROM_NAME = "NC State Campsite Alerts"
 
 BOOKING_URL = "https://app.fireflyreservations.com/reserve/property/NCStateFairCampground"
 CALENDAR_URL = "https://app.fireflyreservations.com/Reserve/GetPropertyAvailabilityCalendar"
@@ -221,8 +225,8 @@ def send_email(sender, title, body):
     bcc = mailing_list(sender)
     message = EmailMessage()
     message["Subject"] = title
-    message["From"] = sender
-    message["To"] = sender
+    message["From"] = formataddr((EMAIL_FROM_NAME, sender))
+    message["To"] = formataddr((EMAIL_FROM_NAME, sender))
     if bcc:
         message["Bcc"] = ", ".join(bcc)
     message.set_content(f"{body}\n\nBook: {BOOKING_URL}\n")
