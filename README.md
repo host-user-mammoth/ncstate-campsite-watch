@@ -33,8 +33,12 @@ Each alert links straight to the booking page.
    gh secret set NTFY_TOPIC            # your ntfy topic name
    gh secret set GMAIL_ADDRESS         # the Gmail account that sends the alerts
    gh secret set GMAIL_APP_PASSWORD    # the App Password from step 2
-   gh secret set ALERT_EMAIL_TO        # optional: comma-separated recipients (default: GMAIL_ADDRESS)
+   gh secret set ALERT_EMAIL_TO        # optional: mailing list, comma-separated
    ```
+
+   Addresses in `ALERT_EMAIL_TO` get the alert emails as BCC, so they can't see each other, and
+   `GMAIL_ADDRESS` always gets a copy. Recipients don't need to install or sign up for anything. To change
+   the list, set the secret again with the full list.
 
 4. **Test.** `gh workflow run watch.yml -f action=test-notify`, or on GitHub open
    **Actions → Watch campsites → Run workflow** and choose `test-notify`.

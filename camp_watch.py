@@ -16,7 +16,7 @@ Alert channels are configured with environment variables:
   NTFY_TOPIC            ntfy.sh topic your phone is subscribed to
   GMAIL_ADDRESS         Gmail account that sends the email
   GMAIL_APP_PASSWORD    Gmail App Password for that account
-  ALERT_EMAIL_TO        optional; comma-separated recipients (default: GMAIL_ADDRESS)
+  ALERT_EMAIL_TO        optional; comma-separated mailing list, sent as BCC (GMAIL_ADDRESS always gets a copy)
 """
 
 import argparse
@@ -209,11 +209,15 @@ def send_push(topic, title, body, priority, tags):
 
 def send_email(sender, title, body):
     password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
-    recipients = [a.strip() for a in (os.environ.get("ALERT_EMAIL_TO") or sender).split(",") if a.strip()]
+    # The sender always gets a copy; the mailing list is BCC'd so recipients can't see each other.
+    mailing_list = [a.strip() for a in os.environ.get("ALERT_EMAIL_TO", "").split(",")
+                    if a.strip() and a.strip().lower() != sender.lower()]
     message = EmailMessage()
     message["Subject"] = title
     message["From"] = sender
-    message["To"] = ", ".join(recipients)
+    message["To"] = sender
+    if mailing_list:
+        message["Bcc"] = ", ".join(mailing_list)
     message.set_content(f"{body}\n\nBook: {BOOKING_URL}\n")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(sender, password)
