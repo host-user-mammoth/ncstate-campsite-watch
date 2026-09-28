@@ -35,16 +35,10 @@ from pathlib import Path
 
 # --- Settings -----------------------------------------------------------------
 
-# NC State home games at Carter-Finley Stadium, 2026 season.
+# NC State home games to watch at Carter-Finley Stadium, 2026 season (only Duke for now).
 # The monitor alerts only when the night before AND the night of a game are both open.
 HOME_GAMES = {
-    "2026-09-11": "Richmond",
-    "2026-09-26": "Appalachian State",
-    "2026-10-03": "Louisville",
-    "2026-10-10": "Wake Forest",
-    "2026-10-31": "California",
     "2026-11-07": "Duke",
-    "2026-11-14": "Syracuse",
 }
 
 # Rig used for the search. Site length limits change which sites count as open.
@@ -271,6 +265,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="print availability only; no alerts, no state")
     parser.add_argument("--test-notify", action="store_true", help="send a test alert on every configured channel")
     parser.add_argument("--send-settings", action="store_true", help="send a summary of the monitor's settings")
+    parser.add_argument("--note", default="", help="with --send-settings: a line at the top saying what changed")
     args = parser.parse_args()
 
     if args.test_notify:
@@ -279,10 +274,12 @@ def main():
                        priority="default", tags="white_check_mark")
         sys.exit(1 if errors else 0)
     if args.send_settings:
+        note = args.note.strip()
         summary = settings_summary(today_eastern())
-        print(summary)
-        body = "\n\n".join(part for part in (summary, ntfy_instructions()) if part)
-        errors = alert("Campsite alert settings and rules", body, priority="default", tags="gear")
+        print("\n\n".join(part for part in (note, summary) if part))
+        body = "\n\n".join(part for part in (note, summary, ntfy_instructions()) if part)
+        title = "Campsite alerts update" if note else "Campsite alert settings and rules"
+        errors = alert(title, body, priority="default", tags="gear")
         sys.exit(1 if errors else 0)
 
     today = today_eastern()

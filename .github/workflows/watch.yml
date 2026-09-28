@@ -10,6 +10,10 @@ on:
         type: choice
         options: [check, test-notify, send-settings]
         default: check
+      note:
+        description: "send-settings only: a line at the top saying what changed"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -31,9 +35,11 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           ACTION: ${{ inputs.action }}
+          NOTE: ${{ inputs.note }}
         run: |
           case "$ACTION" in
-            test-notify|send-settings) python3 camp_watch.py "--$ACTION" ;;
+            test-notify) python3 camp_watch.py --test-notify ;;
+            send-settings) python3 camp_watch.py --send-settings --note "$NOTE" ;;
             *) python3 camp_watch.py ;;
           esac
 

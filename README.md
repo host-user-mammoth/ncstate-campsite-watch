@@ -1,7 +1,8 @@
 # NC State Fair Campground monitor
 
 Checks the [NC State Fair Campground](https://app.fireflyreservations.com/reserve/property/NCStateFairCampground)
-every 5 minutes for open RV sites on NC State home football weekends. It alerts your phone (ntfy) and/or
+every 5 minutes for open RV sites on NC State home football weekends (currently just the Duke game,
+Sat Nov 7). It alerts your phone (ntfy) and/or
 email (Gmail) only when **both** the night before and the night of a game have open sites. If only one of
 the two nights opens, you won't get an alert.
 
@@ -73,7 +74,7 @@ Check from your own computer without sending alerts: `python camp_watch.py --dry
 ## Things to know
 
 - **October is blocked.** The campground closes reservations for all of October because of the State Fair,
-  so the Oct 3, Oct 10 and Oct 31 games show as full. They're still watched in case that changes.
+  so October games would always show as full.
 - **Counts are per night.** Fri and Sat can each show an open site without the same site being free both
   nights. Check before you book a 2-night stay.
 - **On game day,** that weekend is no longer watched, because the night before has already passed.
