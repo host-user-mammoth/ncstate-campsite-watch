@@ -1,8 +1,9 @@
 # NC State Fair Campground monitor
 
 Checks the [NC State Fair Campground](https://app.fireflyreservations.com/reserve/property/NCStateFairCampground)
-every 5 minutes for open RV sites on the night before and the night of each NC State home football game.
-When a full night opens up, it sends an alert to your phone (ntfy) and/or by email (Gmail).
+every 5 minutes for open RV sites on NC State home football weekends. It alerts your phone (ntfy) and/or
+email (Gmail) only when **both** the night before and the night of a game have open sites. If only one of
+the two nights opens, you won't get an alert.
 
 - `camp_watch.py` does the check and sends alerts. It has no dependencies beyond Python 3.
 - `.github/workflows/watch.yml` runs it on GitHub Actions every 5 minutes.
@@ -13,9 +14,9 @@ When a full night opens up, it sends an alert to your phone (ntfy) and/or by ema
 
 | When | Push | Email |
 | --- | --- | --- |
-| First run: status of every watched night | yes | yes |
-| A full night has an open site (urgent) | yes | yes |
-| A previously open night is full again | yes (low priority) | no |
+| First run: status of every game weekend | yes | yes |
+| Both nights of a game weekend are open (urgent) | yes | yes |
+| A weekend you were alerted about is no longer open both nights | yes (low priority) | no |
 
 Each alert links straight to the booking page.
 
@@ -53,6 +54,7 @@ Check from your own computer without sending alerts: `python camp_watch.py --dry
   so the Oct 3, Oct 10 and Oct 31 games show as full. They're still watched in case that changes.
 - **Counts are per night.** Fri and Sat can each show an open site without the same site being free both
   nights. Check before you book a 2-night stay.
+- **On game day,** that weekend is no longer watched, because the night before has already passed.
 - **GitHub's schedule is approximate.** Runs are nominally every 5 minutes but are often delayed 5–15 minutes.
 - **Failures.** If the site is unreachable or its page layout changes, the run fails and GitHub emails you.
 - **After the season,** stop it with `gh workflow disable watch.yml`.

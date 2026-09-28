@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Watch the NC State Fair Campground for open RV sites on NC State home-football
-weekends, and alert (ntfy phone push and/or Gmail) when a sold-out night opens up.
+weekends, and alert (ntfy phone push and/or Gmail) when both the night before and
+the night of a game have open sites. A single open night does not trigger an alert.
 
 Availability comes from the Firefly Reservations availability calendar, which
 reports how many sites are free for each night. Standard library only.
@@ -33,7 +34,7 @@ from pathlib import Path
 # --- Settings -----------------------------------------------------------------
 
 # NC State home games at Carter-Finley Stadium, 2026 season.
-# The monitor watches the night before and the night of each game.
+# The monitor alerts only when the night before AND the night of a game are both open.
 HOME_GAMES = {
     "2026-09-11": "Richmond",
     "2026-09-26": "Appalachian State",
@@ -129,15 +130,23 @@ def today_eastern():
         return dt.date.today()
 
 
-def watched_nights(today):
-    """Return {night: (game_date, opponent, role)} for upcoming nights before and of each home game."""
-    nights = {}
+def watched_games(today):
+    """Return {game_date: opponent} for home games whose night before is still ahead."""
+    games = {}
     for game_day, opponent in sorted(HOME_GAMES.items()):
         game = dt.date.fromisoformat(game_day)
-        for night, role in ((game - dt.timedelta(days=1), "night before"), (game, "game night")):
-            if night >= today:
-                nights[night] = (game, opponent, role)
-    return nights
+        if stay(game)[0] >= today:
+            games[game] = opponent
+    return games
+
+
+def stay(game):
+    """The two nights to book for a game: the night before and the night of the game."""
+    return (game - dt.timedelta(days=1), game)
+
+
+def both_open(labels, game):
+    return all(is_open(labels.get(night, "0")) for night in stay(game))
 
 
 def day_name(day):
@@ -150,17 +159,9 @@ def describe(label):
     return f"{label} site{'' if label == '1' else 's'} open"
 
 
-def weekend_lines(nights, labels, games=None):
-    """One line per game weekend, e.g. "Duke (Sat Nov 7): Fri Nov 6 2 sites open | Sat Nov 7 FULL"."""
-    weekends = {}
-    for night, (game, opponent, _) in sorted(nights.items()):
-        if games is None or game in games:
-            weekends.setdefault((game, opponent), []).append(night)
-    return [
-        f"{opponent} ({day_name(game)}): "
-        + " | ".join(f"{day_name(night)} {describe(labels[night])}" for night in weekend)
-        for (game, opponent), weekend in weekends.items()
-    ]
+def weekend_line(game, opponent, labels):
+    """E.g. "Duke: Fri Nov 6 2 sites open | Sat Nov 7 FULL"."""
+    return f"{opponent}: " + " | ".join(f"{day_name(night)} {describe(labels[night])}" for night in stay(game))
 
 
 # --- Alerts -------------------------------------------------------------------
@@ -228,47 +229,47 @@ def main():
         sys.exit(1 if errors else 0)
 
     today = today_eastern()
-    nights = watched_nights(today)
-    if not nights:
-        print("No upcoming game nights to watch. Disable the workflow or add next season's games.")
+    games = watched_games(today)
+    if not games:
+        print("No upcoming game weekends to watch. Disable the workflow or add next season's games.")
         return
 
+    nights = [night for game in games for night in stay(game)]
     calendar = {}
     for first_day in sorted({night.replace(day=1) for night in nights}):
         calendar.update(fetch_month(first_day))
     labels = {night: calendar[night] for night in nights}
 
     print(f"Checked {today} for a {RV_LENGTH_FT} ft {RV_EQUIPMENT}:")
-    for night, (_, opponent, role) in sorted(nights.items()):
-        print(f"  {day_name(night):<11} {opponent + ', ' + role:<32} {describe(labels[night])}")
+    for game, opponent in games.items():
+        print(f"  {weekend_line(game, opponent, labels)}{'  <- BOTH NIGHTS OPEN' if both_open(labels, game) else ''}")
     if args.dry_run:
         return
 
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
     previous = {dt.date.fromisoformat(day): label for day, label in state.get("nights", {}).items()}
-    opened = [n for n in sorted(nights) if is_open(labels[n]) and not is_open(previous.get(n, "0"))]
-    closed = [n for n in sorted(nights) if not is_open(labels[n]) and n in previous and is_open(previous[n])]
+    opened = [game for game in games if both_open(labels, game) and not both_open(previous, game)]
+    closed = [game for game in games if not both_open(labels, game) and both_open(previous, game)]
 
     if not state:
         alert("Campsite monitor started",
-              "Watching the night before and night of each NC State home game:\n"
-              + "\n".join(weekend_lines(nights, labels))
-              + "\nYou'll get an alert when a full night opens up.",
+              "You'll get an alert only when both the night before and the night of a home game are open:\n"
+              + "\n".join(weekend_line(game, opponent, labels) for game, opponent in games.items()),
               priority="default", tags="football")
     elif opened:
-        title = (f"Campsite open: {day_name(opened[0])} ({nights[opened[0]][1]})" if len(opened) == 1
-                 else f"Campsites open on {len(opened)} game nights")
-        lines = [f"OPEN: {day_name(n)} ({nights[n][1]} {nights[n][2]}) - {describe(labels[n])}" for n in opened]
-        lines += [f"Full again: {day_name(n)} ({nights[n][1]})" for n in closed]
-        lines += weekend_lines(nights, labels, games={nights[n][0] for n in opened})
-        lines.append("Counts are per night; for a 2-night stay, confirm one site is free both nights.")
+        game = opened[0]
+        title = (f"Both nights open: {games[game]} ({day_name(stay(game)[0])} + {day_name(game)})"
+                 if len(opened) == 1 else f"Both nights open on {len(opened)} game weekends")
+        lines = [weekend_line(game, games[game], labels) for game in opened]
+        lines += [f"No longer open both nights: {games[game]}" for game in closed]
+        lines.append("Counts are per night; when booking, make sure one site is free both nights.")
         alert(title, "\n".join(lines), priority="urgent", tags="tent,rotating_light")
     elif closed:
-        alert("Campsite full again",
-              "\n".join(f"{day_name(n)} ({nights[n][1]} {nights[n][2]}) is full again." for n in closed),
+        alert("Game weekend no longer open",
+              "\n".join(weekend_line(game, games[game], labels) for game in closed),
               priority="low", tags="no_entry", email=False)
 
-    new_state = {"nights": {night.isoformat(): labels[night] for night in sorted(nights)}}
+    new_state = {"nights": {night.isoformat(): labels[night] for night in nights}}
     if new_state != state:
         STATE_FILE.write_text(json.dumps(new_state, indent=2) + "\n")
         print(f"Updated {STATE_FILE.name}")
