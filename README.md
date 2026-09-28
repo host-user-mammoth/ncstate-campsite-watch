@@ -1,0 +1,58 @@
+# NC State Fair Campground monitor
+
+Checks the [NC State Fair Campground](https://app.fireflyreservations.com/reserve/property/NCStateFairCampground)
+every 5 minutes for open RV sites on the night before and the night of each NC State home football game.
+When a full night opens up, it sends an alert to your phone (ntfy) and/or by email (Gmail).
+
+- `camp_watch.py` does the check and sends alerts. It has no dependencies beyond Python 3.
+- `.github/workflows/watch.yml` runs it on GitHub Actions every 5 minutes.
+- `state.json` holds the last availability seen, so you're only alerted when something changes.
+  The workflow commits it back to the repo whenever it changes.
+
+## Alerts you'll get
+
+| When | Push | Email |
+| --- | --- | --- |
+| First run: status of every watched night | yes | yes |
+| A full night has an open site (urgent) | yes | yes |
+| A previously open night is full again | yes (low priority) | no |
+
+Each alert links straight to the booking page.
+
+## Setup
+
+1. **Phone push.** Install the ntfy app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy),
+   [iPhone](https://apps.apple.com/us/app/ntfy/id1625396347)), tap **+**, and subscribe to your topic name.
+   Anyone who knows the topic name can read the alerts, so keep it private.
+2. **Gmail.** Turn on 2-Step Verification, then create an App Password at
+   <https://myaccount.google.com/apppasswords>.
+3. **Secrets.** Add these under the repo's **Settings → Secrets and variables → Actions**, or with `gh`:
+
+   ```sh
+   gh secret set NTFY_TOPIC            # your ntfy topic name
+   gh secret set GMAIL_ADDRESS         # the Gmail account that sends the alerts
+   gh secret set GMAIL_APP_PASSWORD    # the App Password from step 2
+   gh secret set ALERT_EMAIL_TO        # optional: comma-separated recipients (default: GMAIL_ADDRESS)
+   ```
+
+4. **Test.** `gh workflow run watch.yml -f test_notify=true`, or on GitHub open
+   **Actions → Watch campsites → Run workflow** and tick the test box.
+
+## Changing what it watches
+
+Edit the settings at the top of `camp_watch.py`:
+
+- `HOME_GAMES`: game dates and opponents. Past dates are skipped automatically.
+- `RV_LENGTH_FT` / `RV_EQUIPMENT`: your rig. Some sites have length limits, so this changes the counts.
+
+Check from your own computer without sending alerts: `python camp_watch.py --dry-run`
+
+## Things to know
+
+- **October is blocked.** The campground closes reservations for all of October because of the State Fair,
+  so the Oct 3, Oct 10 and Oct 31 games show as full. They're still watched in case that changes.
+- **Counts are per night.** Fri and Sat can each show an open site without the same site being free both
+  nights. Check before you book a 2-night stay.
+- **GitHub's schedule is approximate.** Runs are nominally every 5 minutes but are often delayed 5–15 minutes.
+- **Failures.** If the site is unreachable or its page layout changes, the run fails and GitHub emails you.
+- **After the season,** stop it with `gh workflow disable watch.yml`.

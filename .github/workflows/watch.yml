@@ -1,0 +1,43 @@
+name: Watch campsites
+
+on:
+  schedule:
+    - cron: "2-59/5 * * * *" # every 5 minutes, offset from the top of the hour when GitHub is busiest
+  workflow_dispatch:
+    inputs:
+      test_notify:
+        description: Send a test alert instead of checking availability
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watch-campsites
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check availability
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: python3 camp_watch.py ${{ inputs.test_notify && '--test-notify' || '' }}
+
+      - name: Save state
+        run: |
+          if [ -n "$(git status --porcelain -- state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update campsite availability"
+            git pull --rebase
+            git push
+          fi
