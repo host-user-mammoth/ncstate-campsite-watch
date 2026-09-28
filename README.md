@@ -37,14 +37,28 @@ Each alert links straight to the booking page.
    ```
 
    Addresses in `ALERT_EMAIL_TO` get the alert emails as BCC, so they can't see each other, and
-   `GMAIL_ADDRESS` always gets a copy. Recipients don't need to install or sign up for anything. To change
-   the list, set the secret again with the full list.
-
+   `GMAIL_ADDRESS` always gets a copy. Recipients don't need to install or sign up for anything.
+   See [Mailing list](#mailing-list) for the easy way to set it.
 4. **Test.** `gh workflow run watch.yml -f action=test-notify`, or on GitHub open
    **Actions → Watch campsites → Run workflow** and choose `test-notify`.
 
 To get a notification listing the monitor's current settings (games, rig, alert rule, check interval,
 channels), run `gh workflow run watch.yml -f action=send-settings`.
+
+## Mailing list
+
+The list lives in `mailing_list.txt` in this folder, one email address per line. That file is in
+`.gitignore`, so it stays on your computer and never goes to the public repo.
+
+To add or remove someone, edit `mailing_list.txt`, save it, and run this in the VS Code terminal
+(PowerShell) from this folder:
+
+```powershell
+Get-Content mailing_list.txt | gh secret set ALERT_EMAIL_TO -R host-user-mammoth/ncstate-campsite-watch
+```
+
+To check it worked, run `gh workflow run watch.yml -f action=send-settings`. The settings message says how
+many people are on the mailing list, and everyone on the list gets a copy.
 
 ## Changing what it watches
 

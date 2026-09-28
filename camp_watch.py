@@ -16,7 +16,7 @@ Alert channels are configured with environment variables:
   NTFY_TOPIC            ntfy.sh topic your phone is subscribed to
   GMAIL_ADDRESS         Gmail account that sends the email
   GMAIL_APP_PASSWORD    Gmail App Password for that account
-  ALERT_EMAIL_TO        optional; comma-separated mailing list, sent as BCC (GMAIL_ADDRESS always gets a copy)
+  ALERT_EMAIL_TO        optional; mailing list (commas, spaces or new lines), sent as BCC (GMAIL_ADDRESS always gets a copy)
 """
 
 import argparse
@@ -182,8 +182,10 @@ def check_interval():
 
 def settings_summary(today):
     games = watched_games(today)
-    channels = [name for name, variable in (("phone push (ntfy)", "NTFY_TOPIC"), ("email (Gmail)", "GMAIL_ADDRESS"))
-                if os.environ.get(variable, "").strip()]
+    sender = os.environ.get("GMAIL_ADDRESS", "").strip()
+    channels = ["phone push (ntfy)"] if os.environ.get("NTFY_TOPIC", "").strip() else []
+    if sender:
+        channels.append(f"email to you + {len(mailing_list(sender))} on the mailing list")
     lines = ["Campground: NC State Fair Campground, RV sites",
              f"Rig: {RV_LENGTH_FT} ft {EQUIPMENT_NAMES.get(RV_EQUIPMENT, RV_EQUIPMENT)}",
              "Game weekends watched (night before + game night):"]
@@ -207,21 +209,27 @@ def send_push(topic, title, body, priority, tags):
     urllib.request.urlopen(request, timeout=30).close()
 
 
+def mailing_list(sender):
+    """Addresses in ALERT_EMAIL_TO (separated by commas, spaces or new lines), minus the sender."""
+    return [address for address in re.split(r"[\s,;]+", os.environ.get("ALERT_EMAIL_TO", ""))
+            if "@" in address and address.lower() != sender.lower()]
+
+
 def send_email(sender, title, body):
     password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
     # The sender always gets a copy; the mailing list is BCC'd so recipients can't see each other.
-    mailing_list = [a.strip() for a in os.environ.get("ALERT_EMAIL_TO", "").split(",")
-                    if a.strip() and a.strip().lower() != sender.lower()]
+    bcc = mailing_list(sender)
     message = EmailMessage()
     message["Subject"] = title
     message["From"] = sender
     message["To"] = sender
-    if mailing_list:
-        message["Bcc"] = ", ".join(mailing_list)
+    if bcc:
+        message["Bcc"] = ", ".join(bcc)
     message.set_content(f"{body}\n\nBook: {BOOKING_URL}\n")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(sender, password)
         smtp.send_message(message)
+    print(f"Emailed you + {len(bcc)} on the mailing list")
 
 
 def alert(title, body, priority="high", tags="tent", email=True):
