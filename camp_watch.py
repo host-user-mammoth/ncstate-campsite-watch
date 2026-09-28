@@ -189,14 +189,14 @@ def settings_summary(today):
     sender = os.environ.get("GMAIL_ADDRESS", "").strip()
     channels = ["phone push (ntfy)"] if os.environ.get("NTFY_TOPIC", "").strip() else []
     if sender:
-        channels.append(f"email to you + {len(mailing_list(sender))} on the mailing list")
+        channels.append(f"email to {1 + len(mailing_list(sender))} people")
     lines = ["Campground: NC State Fair Campground, RV sites",
              f"Rig: {RV_LENGTH_FT} ft {EQUIPMENT_NAMES.get(RV_EQUIPMENT, RV_EQUIPMENT)}",
              "Game weekends watched (night before + game night):"]
     lines += [f"  {opponent}: {day_name(stay(game)[0])} + {day_name(game)}" for game, opponent in games.items()]
     lines += ["  none left this season"] if not games else []
-    lines += ["Alerts when: BOTH nights have an open site (one night alone is ignored)",
-              "Also: low-priority push if an alerted weekend fills up again",
+    lines += ["Alerts when: BOTH the night before and game night have an open site (one night alone is ignored)",
+              "Also: a low-priority phone push (no email) if an alerted weekend fills up again",
               f"Checks: {check_interval()}",
               f"Alerts go to: {', '.join(channels) or 'nothing configured'}"]
     return "\n".join(lines)
@@ -279,7 +279,7 @@ def main():
     if args.send_settings:
         summary = settings_summary(today_eastern())
         print(summary)
-        errors = alert("Campsite monitor settings", summary, priority="default", tags="gear")
+        errors = alert("Campsite alert settings and rules", summary, priority="default", tags="gear")
         sys.exit(1 if errors else 0)
 
     today = today_eastern()
