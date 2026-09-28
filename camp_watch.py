@@ -179,6 +179,9 @@ def settings_summary(today):
     lines += [f"  {opponent}: {day_name(stay(game)[0])} + {day_name(game)}" for game, opponent in games.items()]
     lines += ["  none left this season"] if not games else []
     lines.append("Alerts when: BOTH the night before and game night have an open site (one night alone is ignored)")
+    lines.append("How you're alerted: by email"
+                 + (", and by notification in the ntfy app (optional, setup below)"
+                    if os.environ.get("NTFY_TOPIC", "").strip() else ""))
     return "\n".join(lines)
 
 
