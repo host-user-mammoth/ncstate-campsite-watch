@@ -42,8 +42,9 @@ Each alert links straight to the booking page.
 4. **Test.** `gh workflow run watch.yml -f action=test-notify`, or on GitHub open
    **Actions → Watch campsites → Run workflow** and choose `test-notify`.
 
-To get a notification listing the monitor's current settings (games, rig, alert rule, check interval,
-channels), run `gh workflow run watch.yml -f action=send-settings`.
+To send everyone the alert rules (games, rig, the both-nights rule) plus steps for getting ntfy phone
+alerts, run `gh workflow run watch.yml -f action=send-settings`. That message includes the ntfy topic name,
+so it goes only to the people on the alerts and is never printed in the public run log.
 
 ## Mailing list
 
@@ -57,8 +58,8 @@ To add or remove someone, edit `mailing_list.txt`, save it, and run this in the 
 Get-Content mailing_list.txt | gh secret set ALERT_EMAIL_TO -R host-user-mammoth/ncstate-campsite-watch
 ```
 
-To check it worked, run `gh workflow run watch.yml -f action=send-settings`. The settings message says how
-many people are on the mailing list, and everyone on the list gets a copy.
+To check it worked, run `gh workflow run watch.yml -f action=send-settings`; everyone on the list should
+get a copy.
 
 ## Changing what it watches
 

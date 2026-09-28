@@ -60,7 +60,6 @@ BOOKING_URL = "https://app.fireflyreservations.com/reserve/property/NCStateFairC
 CALENDAR_URL = "https://app.fireflyreservations.com/Reserve/GetPropertyAvailabilityCalendar"
 PROPERTY_GUID = "98438fc0-fc1b-475d-b2c9-0a731b3dffd9"
 STATE_FILE = Path(__file__).with_name("state.json")
-WORKFLOW_FILE = Path(__file__).parent / ".github" / "workflows" / "watch.yml"
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/129.0 Safari/537.36")
 
@@ -172,34 +171,34 @@ def weekend_line(game, opponent, labels):
     return f"{opponent}: " + " | ".join(f"{day_name(night)} {describe(labels[night])}" for night in stay(game))
 
 
-def check_interval():
-    """Describe the GitHub Actions schedule, e.g. "every 5 min on GitHub Actions"."""
-    try:
-        cron = re.search(r'cron:\s*"([^"]+)"', WORKFLOW_FILE.read_text()).group(1)
-    except (OSError, AttributeError):
-        return "only when run by hand"
-    step = re.search(r"/(\d+)$", cron.split()[0])
-    if not step:
-        return f"on the GitHub Actions schedule {cron!r}"
-    return f"every {step.group(1)} min on GitHub Actions (runs often start 5-15 min late)"
-
-
 def settings_summary(today):
     games = watched_games(today)
-    sender = os.environ.get("GMAIL_ADDRESS", "").strip()
-    channels = ["phone push (ntfy)"] if os.environ.get("NTFY_TOPIC", "").strip() else []
-    if sender:
-        channels.append(f"email to {1 + len(mailing_list(sender))} people")
     lines = ["Campground: NC State Fair Campground, RV sites",
              f"Rig: {RV_LENGTH_FT} ft {EQUIPMENT_NAMES.get(RV_EQUIPMENT, RV_EQUIPMENT)}",
              "Game weekends watched (night before + game night):"]
     lines += [f"  {opponent}: {day_name(stay(game)[0])} + {day_name(game)}" for game, opponent in games.items()]
     lines += ["  none left this season"] if not games else []
-    lines += ["Alerts when: BOTH the night before and game night have an open site (one night alone is ignored)",
-              "Also: a low-priority phone push (no email) if an alerted weekend fills up again",
-              f"Checks: {check_interval()}",
-              f"Alerts go to: {', '.join(channels) or 'nothing configured'}"]
+    lines.append("Alerts when: BOTH the night before and game night have an open site (one night alone is ignored)")
     return "\n".join(lines)
+
+
+def ntfy_instructions():
+    """How to get the phone alerts; includes the private topic name, so never print it to the public log."""
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if not topic:
+        return ""
+    return "\n".join([
+        "Get instant phone alerts with ntfy (free, optional):",
+        '1. Install the "ntfy" app from the App Store (iPhone) or Google Play (Android).',
+        "2. Open it, tap +, type this topic name exactly, and tap Subscribe:",
+        f"   {topic}",
+        "   Leave the server setting as it is.",
+        "3. Allow notifications when the app asks.",
+        "When a campsite opens, you'll get a push; tap it to open the booking page.",
+        "iPhone: if alerts only show inside the app, go to Settings > Notifications > ntfy and turn on "
+        "Allow Notifications, or delete the subscription in the app and add it again.",
+        "Keep the topic name private: anyone who has it can see these alerts.",
+    ])
 
 
 # --- Alerts -------------------------------------------------------------------
@@ -233,7 +232,7 @@ def send_email(sender, title, body):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(sender, password)
         smtp.send_message(message)
-    print(f"Emailed you + {len(bcc)} on the mailing list")
+    print("Email sent")
 
 
 def alert(title, body, priority="high", tags="tent", email=True):
@@ -279,7 +278,8 @@ def main():
     if args.send_settings:
         summary = settings_summary(today_eastern())
         print(summary)
-        errors = alert("Campsite alert settings and rules", summary, priority="default", tags="gear")
+        body = "\n\n".join(part for part in (summary, ntfy_instructions()) if part)
+        errors = alert("Campsite alert settings and rules", body, priority="default", tags="gear")
         sys.exit(1 if errors else 0)
 
     today = today_eastern()
