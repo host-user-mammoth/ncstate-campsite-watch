@@ -36,8 +36,11 @@ Each alert links straight to the booking page.
    gh secret set ALERT_EMAIL_TO        # optional: comma-separated recipients (default: GMAIL_ADDRESS)
    ```
 
-4. **Test.** `gh workflow run watch.yml -f test_notify=true`, or on GitHub open
-   **Actions → Watch campsites → Run workflow** and tick the test box.
+4. **Test.** `gh workflow run watch.yml -f action=test-notify`, or on GitHub open
+   **Actions → Watch campsites → Run workflow** and choose `test-notify`.
+
+To get a notification listing the monitor's current settings (games, rig, alert rule, check interval,
+channels), run `gh workflow run watch.yml -f action=send-settings`.
 
 ## Changing what it watches
 

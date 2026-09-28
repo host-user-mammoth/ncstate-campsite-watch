@@ -5,10 +5,11 @@ on:
     - cron: "2-59/5 * * * *" # every 5 minutes, offset from the top of the hour when GitHub is busiest
   workflow_dispatch:
     inputs:
-      test_notify:
-        description: Send a test alert instead of checking availability
-        type: boolean
-        default: false
+      action:
+        description: What to do
+        type: choice
+        options: [check, test-notify, send-settings]
+        default: check
 
 permissions:
   contents: write
@@ -29,7 +30,12 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-        run: python3 camp_watch.py ${{ inputs.test_notify && '--test-notify' || '' }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          case "$ACTION" in
+            test-notify|send-settings) python3 camp_watch.py "--$ACTION" ;;
+            *) python3 camp_watch.py ;;
+          esac
 
       - name: Save state
         run: |

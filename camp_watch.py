@@ -10,6 +10,7 @@ Usage:
   python camp_watch.py                # check, alert on changes, update state.json
   python camp_watch.py --dry-run      # print availability only; no alerts, no state
   python camp_watch.py --test-notify  # send a test alert on every configured channel
+  python camp_watch.py --send-settings  # send a summary of what the monitor watches and how it alerts
 
 Alert channels are configured with environment variables:
   NTFY_TOPIC            ntfy.sh topic your phone is subscribed to
@@ -48,11 +49,14 @@ HOME_GAMES = {
 # Rig used for the search. Site length limits change which sites count as open.
 RV_LENGTH_FT = 25
 RV_EQUIPMENT = "TT"  # FW fifth wheel, MHA/MHB/MHC motorhome, PU popup, TT travel trailer, TC truck camper
+EQUIPMENT_NAMES = {"FW": "fifth wheel", "MHA": "Class A motorhome", "MHB": "Class B motorhome",
+                   "MHC": "Class C motorhome", "PU": "popup", "TT": "travel trailer", "TC": "truck camper"}
 
 BOOKING_URL = "https://app.fireflyreservations.com/reserve/property/NCStateFairCampground"
 CALENDAR_URL = "https://app.fireflyreservations.com/Reserve/GetPropertyAvailabilityCalendar"
 PROPERTY_GUID = "98438fc0-fc1b-475d-b2c9-0a731b3dffd9"
 STATE_FILE = Path(__file__).with_name("state.json")
+WORKFLOW_FILE = Path(__file__).parent / ".github" / "workflows" / "watch.yml"
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/129.0 Safari/537.36")
 
@@ -164,6 +168,34 @@ def weekend_line(game, opponent, labels):
     return f"{opponent}: " + " | ".join(f"{day_name(night)} {describe(labels[night])}" for night in stay(game))
 
 
+def check_interval():
+    """Describe the GitHub Actions schedule, e.g. "every 5 min on GitHub Actions"."""
+    try:
+        cron = re.search(r'cron:\s*"([^"]+)"', WORKFLOW_FILE.read_text()).group(1)
+    except (OSError, AttributeError):
+        return "only when run by hand"
+    step = re.search(r"/(\d+)$", cron.split()[0])
+    if not step:
+        return f"on the GitHub Actions schedule {cron!r}"
+    return f"every {step.group(1)} min on GitHub Actions (runs often start 5-15 min late)"
+
+
+def settings_summary(today):
+    games = watched_games(today)
+    channels = [name for name, variable in (("phone push (ntfy)", "NTFY_TOPIC"), ("email (Gmail)", "GMAIL_ADDRESS"))
+                if os.environ.get(variable, "").strip()]
+    lines = ["Campground: NC State Fair Campground, RV sites",
+             f"Rig: {RV_LENGTH_FT} ft {EQUIPMENT_NAMES.get(RV_EQUIPMENT, RV_EQUIPMENT)}",
+             "Game weekends watched (night before + game night):"]
+    lines += [f"  {opponent}: {day_name(stay(game)[0])} + {day_name(game)}" for game, opponent in games.items()]
+    lines += ["  none left this season"] if not games else []
+    lines += ["Alerts when: BOTH nights have an open site (one night alone is ignored)",
+              "Also: low-priority push if an alerted weekend fills up again",
+              f"Checks: {check_interval()}",
+              f"Alerts go to: {', '.join(channels) or 'nothing configured'}"]
+    return "\n".join(lines)
+
+
 # --- Alerts -------------------------------------------------------------------
 
 def send_push(topic, title, body, priority, tags):
@@ -220,12 +252,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="print availability only; no alerts, no state")
     parser.add_argument("--test-notify", action="store_true", help="send a test alert on every configured channel")
+    parser.add_argument("--send-settings", action="store_true", help="send a summary of the monitor's settings")
     args = parser.parse_args()
 
     if args.test_notify:
         errors = alert("Campsite monitor test",
                        "Test alert from the NC State Fair Campground monitor. If you got this, alerts work.",
                        priority="default", tags="white_check_mark")
+        sys.exit(1 if errors else 0)
+    if args.send_settings:
+        summary = settings_summary(today_eastern())
+        print(summary)
+        errors = alert("Campsite monitor settings", summary, priority="default", tags="gear")
         sys.exit(1 if errors else 0)
 
     today = today_eastern()
