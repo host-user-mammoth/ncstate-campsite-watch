@@ -7,7 +7,8 @@ email (Gmail) only when **both** the night before and the night of a game have o
 the two nights opens, you won't get an alert.
 
 - `camp_watch.py` does the check and sends alerts. It has no dependencies beyond Python 3.
-- `.github/workflows/watch.yml` runs it on GitHub Actions every 5 minutes.
+- `.github/workflows/watch.yml` runs it on GitHub Actions every 5 minutes. GitHub's own schedule fires only a few
+  times a day, so each run checks 12 times, 5 minutes apart, and then starts the next run itself.
 - `state.json` holds the last availability seen, so you're only alerted when something changes.
   The workflow commits it back to the repo whenever it changes.
 
@@ -78,6 +79,6 @@ Check from your own computer without sending alerts: `python camp_watch.py --dry
 - **Counts are per night.** Fri and Sat can each show an open site without the same site being free both
   nights. Check before you book a 2-night stay.
 - **On game day,** that weekend is no longer watched, because the night before has already passed.
-- **GitHub's schedule is approximate.** Runs are nominally every 5 minutes but are often delayed 5–15 minutes.
-- **Failures.** If the site is unreachable or its page layout changes, the run fails and GitHub emails you.
-- **After the season,** stop it with `gh workflow disable watch.yml`.
+- **Failures.** If the site is unreachable or its page layout changes, that hour's run fails and GitHub emails you. The next run still starts.
+- **Stopping.** Runs stop starting new ones once no game weekends are left. To stop them sooner, run
+  `gh workflow disable watch.yml`; `gh workflow enable watch.yml` then `gh workflow run watch.yml` restarts them.

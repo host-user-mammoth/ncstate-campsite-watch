@@ -1,8 +1,12 @@
 name: Watch campsites
 
+# GitHub's cron fires only a few times a day on this repo, so a check run doesn't rely on it:
+# it checks every 5 minutes for about an hour, then starts the next run itself. The schedule
+# below is only a backup that restarts the chain if it ever breaks.
+# To stop the chain: gh workflow disable watch.yml
 on:
   schedule:
-    - cron: "2-59/5 * * * *" # every 5 minutes, offset from the top of the hour when GitHub is busiest
+    - cron: "*/30 * * * *" # backup only
   workflow_dispatch:
     inputs:
       action:
@@ -17,39 +21,62 @@ on:
 
 permissions:
   contents: write
+  actions: write # lets a run start the next one
 
 concurrency:
-  group: watch-campsites
+  # One check run at a time; a newer queued run replaces an older queued one. test-notify and
+  # send-settings get their own group so they don't wait behind an hour-long check run.
+  group: watch-campsites-${{ inputs.action || 'check' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 75
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check availability
-        env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-          ACTION: ${{ inputs.action }}
-          NOTE: ${{ inputs.note }}
-        run: |
-          case "$ACTION" in
-            test-notify) python3 camp_watch.py --test-notify ;;
-            send-settings) python3 camp_watch.py --send-settings --note "$NOTE" ;;
-            *) python3 camp_watch.py ;;
-          esac
+      - name: Send test alert
+        if: inputs.action == 'test-notify'
+        run: python3 camp_watch.py --test-notify
 
-      - name: Save state
+      - name: Send settings
+        if: inputs.action == 'send-settings'
+        env:
+          NOTE: ${{ inputs.note }}
+        run: python3 camp_watch.py --send-settings --note "$NOTE"
+
+      - name: Check every 5 minutes for an hour
+        if: (inputs.action || 'check') == 'check'
         run: |
-          if [ -n "$(git status --porcelain -- state.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add state.json
-            git commit -m "Update campsite availability"
-            git pull --rebase
-            git push
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          failed=0
+          for i in $(seq 12); do
+            git pull -q --rebase # pick up edits pushed since the run started
+            echo "::group::Check $i of 12 at $(TZ=America/New_York date '+%-I:%M %p ET')"
+            python3 camp_watch.py || failed=1
+            if [ -n "$(git status --porcelain -- state.json)" ]; then
+              git commit -q -m "Update campsite availability" state.json
+              git pull -q --rebase
+              git push -q
+            fi
+            echo "::endgroup::"
+            if [ "$i" -lt 12 ]; then sleep 300; fi
+          done
+          exit $failed
+
+      - name: Start the next run
+        if: "!cancelled() && (inputs.action || 'check') == 'check'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if python3 -c 'import sys, camp_watch as c; sys.exit(not c.watched_games(c.today_eastern()))'; then
+            gh workflow run watch.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f action=check
+          else
+            echo "No game weekends left to watch, so no next run."
           fi
